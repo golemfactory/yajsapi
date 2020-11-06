@@ -132,20 +132,39 @@ class _Run extends Work {
   private args;
   private env;
   private _idx;
+  private _stdout?: CaptureContext;
+  private _stderr?: CaptureContext;
 
-  constructor(cmd: string, args: Iterable<string> = [], env: {} | null = null) {
+  constructor(
+    cmd: string,
+    args: Iterable<string> = [],
+    env: {} | null = null,
+    stdout?: CaptureContext,
+    stderr?: CaptureContext,
+  ) {
     super();
     this.cmd = cmd;
     this.args = args;
     this.env = env;
     this._idx = null;
+    this._stdout = stdout;
+    this._stderr = stderr;
   }
 
   register(commands: any) {
+    let capture = {};
+    if (this._stdout) {
+      capture["stdout"] = this._stdout.capture_param();
+    }
+    if (this._stderr) {
+      capture["stderr"] = this._stderr.capture_param();
+    }
+
     //CommandContainer
     this._idx = commands.run({
       entry_point: this.cmd,
       args: this.args || [],
+      capture: capture,
     });
   }
 }
@@ -259,8 +278,12 @@ export class WorkContext {
     this._pending_steps.push(new _SendFile(this._storage, src_path, dst_path));
   }
   run(cmd: string, args?: Iterable<string>, env: object | null = null) {
+    // FIXME: remove defaults below, add stdout and stderr arguments
+    let stdout = CaptureContext.build("stream");
+    let stderr = CaptureContext.build("stream");
+
     this._prepare();
-    this._pending_steps.push(new _Run(cmd, args, env));
+    this._pending_steps.push(new _Run(cmd, args, env, stdout, stderr));
   }
   download_file(src_path: string, dst_path: string) {
     this._prepare();
@@ -276,5 +299,66 @@ export class WorkContext {
     let steps = this._pending_steps;
     this._pending_steps = [];
     return new _Steps(steps);
+  }
+}
+
+export enum CaptureMode {
+  HEAD = "head",
+  TAIL = "tail",
+  HEAD_TAIL = "headTail",
+  STREAM = "stream",
+}
+
+export enum CaptureFormat {
+  BIN = "bin",
+  STR = "str"
+}
+
+export class CaptureContext {
+
+  constructor(
+    private mode: string,
+    private limit?: number,
+    private fmt?: string
+  ) {}
+
+  static build(mode?: string, limit?: number, fmt?: string): CaptureContext {
+    if (!mode || mode == "all") {
+      mode = "head";
+      limit = undefined;
+    }
+
+    fmt = fmt
+      ? fmt.toLowerCase()
+      : 'str';
+
+    const get_key = (e: object, s: string) => Object.keys(e).find(k => e[k] == s);
+
+    if (!get_key(CaptureMode, mode)) {
+      throw new Error(`Invalid output capture mode: ${mode}`)
+    }
+    if (!get_key(CaptureFormat, fmt)) {
+      throw new Error(`Invalid output capture format: ${fmt}`)
+    }
+
+    return new CaptureContext(mode, limit, fmt);
+  }
+
+  capture_param(): object {
+    let inner = {};
+    if (this.limit) {
+        inner[this.mode] = this.limit;
+    }
+    if (this.fmt) {
+        inner["format"] = this.fmt;
+    }
+
+    return this.is_streaming()
+      ? { stream: inner }
+      : { atEnd:  inner };
+  }
+
+  is_streaming(): boolean {
+    return this.mode == CaptureMode.STREAM
   }
 }
