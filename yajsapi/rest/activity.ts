@@ -173,7 +173,7 @@ class Activity {
     return state;
   }
 
-  async results(batch_id: string, timeout: number = 30): Promise<ExeScriptCommandResult[]> {
+  async results(batch_id: string, timeout: number = 5): Promise<ExeScriptCommandResult[]> {
     let { data: results } = await this._api.getExecBatchResults(
       this._id,
       batch_id,
@@ -195,7 +195,7 @@ class Activity {
       );
       //with contextlib.suppress(yexc.ApiException):
       try {
-        await this._api.getExecBatchResults(this._id, batch_id, 1);
+        await this._api.getExecBatchResults(this._id, batch_id, undefined, 1);
       } catch(error) {
         //suppress api error
       }
@@ -309,6 +309,9 @@ class CommandExecutionError extends Error {
     super(description);
     this.name = key;
   }
+  toString() {
+    return this.message;
+  }
 }
 
 class Batch implements AsyncIterable<Result> {
@@ -344,8 +347,22 @@ class Batch implements AsyncIterable<Result> {
     let last_idx = 0;
     while (last_idx < this._size) {
       let any_new: boolean = false;
-      let exe_list = await this._activity.results(this._batch_id);
-      let results: yaa.ExeScriptCommandResult[] = exe_list;
+      let results: yaa.ExeScriptCommandResult[] = []
+      try {
+        results = await this._activity.results(this._batch_id);
+      } catch (error) {
+        if (error.response && error.response.status == 408) {
+          continue;
+        } else {
+          if (error.response && error.response.status == 500 && error.response.data) {
+            throw new CommandExecutionError(
+              last_idx.toString(),
+              `Provider might have disconnected (error: ${error.response.data.message})`
+            );
+          }
+          throw error;
+        }
+      }
       results = results.slice(last_idx);
       for (let result of results) {
         any_new = true;
@@ -364,8 +381,8 @@ class Batch implements AsyncIterable<Result> {
         yield _result;
         last_idx = result.index + 1;
         if (result.isBatchFinished) break;
-        if (!any_new) await sleep(10);
       }
+      if (!any_new) await sleep(3);
     }
     return;
   }

@@ -126,11 +126,11 @@ export class LeastExpensiveLinearPayuMS {
   }
 
   async decorate_demand(demand: DemandBuilder): Promise<void> {
-    demand.ensure(`({com.PRICE_MODEL}={com.PriceModel.LINEAR.value})`);
+    demand.ensure(`(${PRICE_MODEL}=${PriceModel.LINEAR})`);
   }
 
   async score_offer(offer: OfferProposal): Promise<Number> {
-    const linear: ComLinear = new ComLinear().from_props(offer.props);
+    const linear: ComLinear = new ComLinear().from_props(offer.props());
 
     if (linear.scheme.value != BillingScheme.PAYU) return SCORE_REJECTED;
 
@@ -544,16 +544,18 @@ export class Engine {
                   // assert len(err.args) >= 2
                   const { name: cmd_idx, description } = error;
                   //throws new CommandExecutionError from activity#355
-                  emit(
-                    new events.CommandExecuted({
-                      success: false,
-                      agr_id: agreement.id(),
-                      task_id: task_id,
-                      command: cc.commands()[cmd_idx],
-                      message: description,
-                      cmd_idx: cmd_idx,
-                    })
-                  );
+                  if (cmd_idx) {
+                    emit(
+                      new events.CommandExecuted({
+                        success: false,
+                        agr_id: agreement.id(),
+                        task_id: task_id,
+                        command: cc.commands()[cmd_idx],
+                        message: description,
+                        cmd_idx: cmd_idx,
+                      })
+                    );
+                  }
                   throw error;
                 }
                 emit(
@@ -580,7 +582,7 @@ export class Engine {
                   emit(
                     new events.WorkerFinished({
                       agr_id: agreement.id(),
-                      exception: [error],
+                      exception: error,
                     })
                   );
                   return;
