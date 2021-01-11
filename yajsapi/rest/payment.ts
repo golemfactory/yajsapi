@@ -260,10 +260,12 @@ export class Payment {
       let ts = init_ts;
       while (true) {
         if (cancellationToken.cancelled) break;
+        console.log("ts", ts.format("YYYY-MM-DD HH:mm:ss.SSSSSSZ"))
         let { data: events } = await api.getInvoiceEvents(
-          undefined,
-          ts.format("YYYY-MM-DD HH:mm:ss.SSSSSSZ")
+          5,
+          ts.unix().toString()
         );
+        console.log("events", events.length);
         for (let ev of events) {
           logger.debug(
             `Received invoice event: ${JSON.stringify(

@@ -191,8 +191,7 @@ class SummaryLogger {
       });
       let msg;
       if (event["num_offers"] === 0)
-        msg = `No offers have been collected from the market for
-            ${this.time_waiting_for_proposals.asSeconds()}s. `;
+        msg = `No offers have been collected from the market for ${this.time_waiting_for_proposals.asSeconds()}s. `;
       else
         msg = `${
           event["num_offers"]

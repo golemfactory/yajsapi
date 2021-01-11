@@ -202,6 +202,7 @@ class Activity {
     );
 
     if (stream) {
+      console.log("StreamingBatch", this._id, batch_id, script.length, deadline)
       return new StreamingBatch(
         this._api,
         this._id,
@@ -210,6 +211,7 @@ class Activity {
         deadline
       );
     }
+    console.log("PollingBatch", this._id, batch_id, script.length, deadline)
     return new PollingBatch(
       this._api,
       this._id,
@@ -227,7 +229,7 @@ class Activity {
       this._id,
       batch_id,
       undefined,
-      timeout
+      { timeout }
     );
     return results;
   }
@@ -239,7 +241,7 @@ class Activity {
   async done(): Promise<void> {
     try {
       const deadline = dayjs.utc().add(10, "s");
-      const batch = await this.send([{ terminate: {} }], true, deadline);
+      const batch = await this.send([{ terminate: {} }], true, deadline); //STREAM should be dynamic
       for await (let evt_ctx of batch) {
         logger.debug(`Command output for 'terminate' ${evt_ctx}`);
       }
@@ -402,7 +404,7 @@ class Batch implements AsyncIterable<events.CommandEventContext> {
     this.activity_id = activity_id;
     this.batch_id = batch_id;
     this.size = batch_size;
-    this.deadline = deadline ? deadline : dayjs().utc().add(365000, "day");
+    this.deadline = deadline ? deadline : dayjs().utc().add(365, "day");
     this.credentials = credentials;
   }
 
@@ -436,6 +438,7 @@ class PollingBatch extends Batch {
       results: yaa.ExeScriptCommandResult[] = [];
     while (last_idx < this.size) {
       const timeout = this.seconds_left();
+      console.log('timeout', timeout);
       if (timeout && timeout <= 0) {
         throw new BatchTimeoutError();
       }
@@ -443,7 +446,8 @@ class PollingBatch extends Batch {
         let { data } = await this.api.getExecBatchResults(
           this.activity_id,
           this.batch_id,
-          timeout
+          undefined,
+          { timeout }
         );
         results = data;
       } catch (error) {
